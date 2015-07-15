@@ -16,7 +16,7 @@
 int main(int argc, char const *argv[])
 {
 	/* Load file and settings */
-	Geom *g = readSTL("bunny.stl");
+	Geom *g = readSTL("data/bunny.stl");
 	if(!g){
 		printf("Format error, program terminated.\n");
 		return -1;	
@@ -31,6 +31,7 @@ int main(int argc, char const *argv[])
 		layers.push_back(g->slice(g->zmin+(i+CUT_BOTTOM/LAYER_HEIGHT)*per_height));
 	}
 	#ifndef SVGOUT
+    //Output Gcode
 	printf("M109 S190\nG28\nG29\nG1 F1200\n");
 	double extrusion = 0;
 	for(list<Layer*>::iterator it = layers.begin(); it != layers.end(); it++){
