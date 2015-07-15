@@ -1,0 +1,5 @@
+*.gcode
+*.svg
+*.out
+main
+
