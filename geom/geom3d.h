@@ -126,6 +126,8 @@ public:
 		bool base_data = false;
 		int tolrence = 0;
 		Shape shape;
+		shape.z = z;
+        shape.type = SHAPE_SHELL;
 		Segment base(Point(0,1),Point(0,0));
 		//Cleaning up the mess data
 		for(list<Segment>::iterator it=path.begin(); it!=path.end(); it++){

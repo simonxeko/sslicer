@@ -8,6 +8,14 @@
 #define GEOM2D
 
 using namespace std;
+#define SHAPE_FILL 10
+#define SHAPE_SHELL 9
+#define SHAPE_BOTTOM 8
+
+double dabs(double x){
+	return x > 0 ? x : -x;
+}
+
 /* Point: Alias 2D Point */
 class Point{
 public:
@@ -25,11 +33,11 @@ public:
 	}
 
 	bool equals(Point a){
-		return ((a.x-this->x)*(a.x-this->x) + (a.y-this->y)*(a.y-this->y))<0.0000000000001;
+		return ((a.x-this->x)*(a.x-this->x) + (a.y-this->y)*(a.y-this->y))<0.00000000000001;
 	}
 
 	bool operator == (const Point& a) const {
-	 	return ((a.x-this->x)*(a.x-this->x) + (a.y-this->y)*(a.y-this->y))<0.0000000000001;
+	 	return ((a.x-this->x)*(a.x-this->x) + (a.y-this->y)*(a.y-this->y))<0.00000000000001;
 	}
 
 	Point operator - (const Point& b){
@@ -155,6 +163,7 @@ public:
 	list<Point> points;
 	float z;
 	float xmax, xmin, ymax, ymin;
+    int type;
 
 	/* Calculate object size for resizing */
 	void calcBoundary(){
@@ -211,6 +220,56 @@ public:
 		printf("</g>\n");
 	}
 
+	void compact(){
+		list<Point>::iterator prev_prev, prev;
+		bool is_compact = false;
+		while(!is_compact){
+			int count = 0;
+			is_compact = true;
+			for(list<Point>::iterator it = points.begin(); it!= points.end(); ++it){
+				count++;
+				if(count >= 3){
+					if(dabs((it->x-prev_prev->x)*(prev->y-prev_prev->y)-(prev->x-prev_prev->x)*(it->y-prev_prev->y))<0.01){
+						is_compact = false;
+						points.erase(prev);
+						//printf(";Compcat!\n");
+					}
+				}
+				prev_prev = prev;
+				prev = it;
+			}
+		}
+	}
+
+	void outputGcode(double &extrusion, int speed, double flow){
+		list<Point>::iterator list_end = points.end();
+		list_end--;
+        if( this->type == SHAPE_SHELL ){
+            Point* lp = NULL;
+            printf(";shape begin\n");
+            for(list<Point>::iterator it = points.begin(); it!= list_end; ++it){
+                Point p = *it;
+                if(lp){
+                    extrusion += sqrt((p.x-lp->x)*(p.x-lp->x)+(p.y-lp->y)*(p.y-lp->y))*0.030*0.4*flow;
+                }
+                printf("G1 F%d X%.3lf Y%.3lf E%lf\n", speed, p.x, p.y, extrusion);
+                lp = &(*it);
+            }
+            Point p = *points.begin();
+            if(lp){
+                extrusion += sqrt((p.x-lp->x)*(p.x-lp->x)+(p.y-lp->y)*(p.y-lp->y))*0.030*0.4*flow;
+            }
+            printf("G1 F%d X%lf Y%lf E%lf\n", speed, points.begin()->x, points.begin()->y,extrusion);
+            printf(";shape end\n");
+        }else{
+            Point p = *points.begin();
+            list<Point>::iterator lp = list_end;
+            printf("G1 F%d X%.3lf Y%.3lf E%.4lf\n", speed, p.x, p.y, extrusion);
+            extrusion += sqrt((p.x-lp->x)*(p.x-lp->x)+(p.y-lp->y)*(p.y-lp->y))*0.030*0.4*flow;
+            printf("G1 F%d X%.3lf Y%.3lf E%.4lf\n", speed, lp->x, lp->y,extrusion);
+        }
+	}
+
 	int size(){
 		return points.size();
 	}
@@ -243,24 +302,43 @@ public:
 		}
 	}
 
+    
+    void fillAll(){
+        this->calcBoundary();
+        for(double z = (int)ymin; z < ymax; z+=0.4){
+            for(list<Shape>::iterator it = shapes.begin(); it != shapes.end(); it++){
+                list<Point> result = it->intersect(Line(0,z));
+                for(list<Point>::iterator it2 = result.begin(); it2 != result.end(); it2++){
+                    Shape s;
+                    s.type = SHAPE_BOTTOM;
+                    s.points.push_back(*it2);
+                    s.points.push_back(*(++it2));
+                    shapes.push_back(s);
+                }
+            }
+        }
+    }
+
 	void fill(){
 		this->calcBoundary();
-		for(int z = ymin; z < ymax; z++){
+		for(double z = ((int)(ymin/8))*8; z < ymax; z+=8){
 			for(list<Shape>::iterator it = shapes.begin(); it != shapes.end(); it++){
 				list<Point> result = it->intersect(Line(0,z));
 				for(list<Point>::iterator it2 = result.begin(); it2 != result.end(); it2++){
 					Shape s;
+                    s.type = SHAPE_FILL;
 					s.points.push_back(*it2);
 					s.points.push_back(*(++it2));
 					shapes.push_back(s);
 				}
 			}
 		}
-		for(int z = xmin; z < xmax; z++){
+		for(double z = ((int)(xmin/8))*8; z < xmax; z+=8){
 			for(list<Shape>::iterator it = shapes.begin(); it != shapes.end(); it++){
 				list<Point> result = it->intersect(Line(0,z,true));
 				for(list<Point>::iterator it2 = result.begin(); it2 != result.end(); it2++){
 					Shape s;
+                    s.type = SHAPE_FILL;
 					s.points.push_back(*it2);
 					if(++it2 != result.end()){
 						s.points.push_back(*(it2));
